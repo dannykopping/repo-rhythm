@@ -1,69 +1,52 @@
 package beats
 
 import (
-	"context"
-	"time"
-
 	"github.com/dannykopping/repo-rhythm/pkg/rhythm"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/shurcooL/githubv4"
 )
 
 type OpenIssues struct {
-	totalCount prometheus.Gauge
+	cfg  *rhythm.Config
+	exec *Executor
+
+	totalCount *prometheus.Desc
 }
 
-func (o *OpenIssues) Start(ctx context.Context, cfg *rhythm.Config, exec *Executor) Beat {
-	t := time.NewTicker(5 * time.Second)
-	go func() {
-		for {
-			select {
-			case <-t.C:
-				var query struct {
-					Base
+func (o *OpenIssues) Setup(cfg *rhythm.Config, exec *Executor) {
+	o.cfg = cfg
+	o.exec = exec
 
-					Repository struct {
-						Issues struct {
-							TotalCount float64
-						} `graphql:"issues(states:OPEN)"`
-					} `graphql:"repository(name:$repo, owner:$owner)"`
-				}
-
-				err := exec.Execute(context.Background(), &query, map[string]interface{}{
-					"owner": githubv4.String(cfg.Owner),
-					"repo":  githubv4.String(cfg.Repo),
-				})
-				if err != nil {
-					panic(err) // TODO handle errors?
-				}
-
-				o.totalCount.Set(query.Repository.Issues.TotalCount)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	return o
-}
-
-func NewOpenIssues() *OpenIssues {
-	return &OpenIssues{
-		totalCount: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "open_issues",
-			Help: "Current number of open issues",
-		}),
-	}
-}
-
-func (o *OpenIssues) Name() string {
-	return "open_issues"
+	o.totalCount = prometheus.NewDesc("open_issues", "Current number of open issues", nil, map[string]string{
+		"owner": cfg.Owner,
+		"repo":  cfg.Repo,
+	})
 }
 
 func (o *OpenIssues) Collect(ch chan<- prometheus.Metric) {
-	o.totalCount.Collect(ch)
+	var query struct {
+		Base
+
+		Repository struct {
+			Issues struct {
+				TotalCount float64
+			} `graphql:"issues(states:OPEN)"`
+		} `graphql:"repository(name:$repo, owner:$owner)"`
+	}
+
+	err := o.exec.Execute(&query, map[string]interface{}{
+		"owner": githubv4.String(o.cfg.Owner),
+		"repo":  githubv4.String(o.cfg.Repo),
+	})
+
+	if err != nil {
+		// don't export metric upon error; the error is handled by the executor
+		return
+	}
+
+	ch <- prometheus.MustNewConstMetric(o.totalCount, prometheus.GaugeValue, query.Repository.Issues.TotalCount)
 }
 
 func (o *OpenIssues) Describe(ch chan<- *prometheus.Desc) {
-	o.totalCount.Describe(ch)
+	ch <- o.totalCount
 }

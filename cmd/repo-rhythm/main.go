@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/dannykopping/repo-rhythm/pkg/beats"
 	repo_rhythm "github.com/dannykopping/repo-rhythm/pkg/rhythm"
@@ -15,9 +16,15 @@ import (
 )
 
 func main() {
+	// TODO: externally configurable
 	cfg := &repo_rhythm.Config{
-		Owner: "grafana",
-		Repo:  "loki",
+		Owner:           "grafana",
+		Repo:            "loki",
+		TimeoutDuration: 10 * time.Second,
+	}
+
+	list := []beats.Beat{
+		&beats.OpenIssues{},
 	}
 
 	src := oauth2.StaticTokenSource(
@@ -26,13 +33,16 @@ func main() {
 	httpClient := oauth2.NewClient(context.Background(), src)
 	client := githubv4.NewClient(httpClient)
 
-	exec := beats.NewExecutor(client)
+	exec := beats.NewExecutor(cfg, client)
 
-	oi := beats.NewOpenIssues().Start(context.Background(), cfg, exec)
+	gatherer := prometheus.NewRegistry()
+	reg := prometheus.WrapRegistererWithPrefix("repo_rhythm_", gatherer)
 
-	reg := prometheus.NewRegistry()
-	reg.MustRegister(oi)
+	for _, beat := range list {
+		beat.Setup(cfg, exec)
+		reg.MustRegister(beat)
+	}
 
-	http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+	http.Handle("/metrics", promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{}))
 	log.Fatal(http.ListenAndServe("127.0.0.1:9123", nil)) // TODO listen on all addresses
 }

@@ -4,18 +4,22 @@ import (
 	"context"
 	"errors"
 
+	"github.com/dannykopping/repo-rhythm/pkg/rhythm"
 	"github.com/shurcooL/githubv4"
 )
 
 // TODO: errata
 var RateLimitedErr = errors.New("rate-limited")
+var TimeoutErr = errors.New("timeout")
 
 type Executor struct {
+	cfg    *rhythm.Config
 	client *githubv4.Client
 }
 
-func NewExecutor(client *githubv4.Client) *Executor {
+func NewExecutor(cfg *rhythm.Config, client *githubv4.Client) *Executor {
 	return &Executor{
+		cfg:    cfg,
 		client: client,
 	}
 }
@@ -24,8 +28,15 @@ type WithRateLimiter interface {
 	RateLimitRemaining() int
 }
 
-func (e *Executor) Execute(ctx context.Context, query WithRateLimiter, variables map[string]interface{}) error {
+func (e *Executor) Execute(query WithRateLimiter, variables map[string]interface{}) error {
+	ctx, cancel := context.WithTimeout(context.Background(), e.cfg.TimeoutDuration)
+	defer cancel()
+
 	err := e.client.Query(ctx, query, variables)
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return TimeoutErr
+	}
 
 	if query.RateLimitRemaining() < 1 {
 		return RateLimitedErr

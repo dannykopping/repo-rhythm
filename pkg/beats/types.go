@@ -1,8 +1,6 @@
 package beats
 
 import (
-	"context"
-
 	"github.com/dannykopping/repo-rhythm/pkg/rhythm"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -10,8 +8,7 @@ import (
 type Beat interface {
 	prometheus.Collector
 
-	Name() string
-	Start(context.Context, *rhythm.Config, *Executor) Beat
+	Setup(*rhythm.Config, *Executor)
 }
 
 type Base struct {
