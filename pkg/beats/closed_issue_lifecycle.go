@@ -2,51 +2,50 @@ package beats
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/dannykopping/repo-rhythm/pkg/rhythm"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/shurcooL/githubv4"
 )
 
-type OpenIssueAge struct {
+type ClosedIssueLifecycle struct {
 	cfg  *rhythm.Config
 	exec *Executor
 
-	ageDistribution *prometheus.Desc
+	lifecycleDistribution *prometheus.Desc
 }
 
-func (o *OpenIssueAge) Setup(cfg *rhythm.Config, exec *Executor) {
+func (o *ClosedIssueLifecycle) Setup(cfg *rhythm.Config, exec *Executor) {
 	o.cfg = cfg
 	o.exec = exec
 
-	o.ageDistribution = prometheus.NewDesc("open_issue_age", "Distribution of open issue ages by bucket",
+	o.lifecycleDistribution = prometheus.NewDesc("closed_issue_lifecycle", "Distribution of closed issue lifecycles (creation to closed time) by bucket",
 		nil, map[string]string{
 			"owner": cfg.Owner,
 			"repo":  cfg.Repo,
 		})
 }
 
-func (o *OpenIssueAge) Collect(ch chan<- prometheus.Metric) {
+func (o *ClosedIssueLifecycle) Collect(ch chan<- prometheus.Metric) {
 	// TODO: we might need to collect in the background if there's a lot of pagination happening here,
 	// 		 since it might stall the scrape for too long or cause rate-limits to kick in
 
 	type issue struct {
 		Id        githubv4.ID
 		CreatedAt githubv4.DateTime
+		ClosedAt  githubv4.DateTime
 	}
 
 	var (
 		iterations    uint = 0
 		maxIterations uint = 100 // prevent infinite loop in the case of some bug, let's hope there are never more than 100*100 issues
 		pageSize      uint = 100
-		now                = time.Now()
-		fetched       int  = 0
+		fetched            = 0
 
 		variables = map[string]interface{}{
 			"owner":  githubv4.String(o.cfg.Owner),
 			"repo":   githubv4.String(o.cfg.Repo),
-			"state":  []githubv4.IssueState{githubv4.IssueStateOpen},
+			"state":  []githubv4.IssueState{githubv4.IssueStateClosed},
 			"cursor": (*githubv4.String)(nil),
 			"limit":  githubv4.Int(pageSize),
 		}
@@ -101,7 +100,7 @@ func (o *OpenIssueAge) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, issue := range issues {
-		hours := now.Sub(issue.CreatedAt.Time).Hours()
+		hours := issue.ClosedAt.Sub(issue.CreatedAt.Time).Hours()
 		sampleCount++
 		sampleSum++
 
@@ -112,9 +111,9 @@ func (o *OpenIssueAge) Collect(ch chan<- prometheus.Metric) {
 		}
 	}
 
-	ch <- prometheus.MustNewConstHistogram(o.ageDistribution, sampleCount, sampleSum, buckets)
+	ch <- prometheus.MustNewConstHistogram(o.lifecycleDistribution, sampleCount, sampleSum, buckets)
 }
 
-func (o *OpenIssueAge) Describe(ch chan<- *prometheus.Desc) {
-	ch <- o.ageDistribution
+func (o *ClosedIssueLifecycle) Describe(ch chan<- *prometheus.Desc) {
+	ch <- o.lifecycleDistribution
 }

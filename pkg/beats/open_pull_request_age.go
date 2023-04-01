@@ -57,23 +57,7 @@ func (o *OpenPullRequestAge) Collect(ch chan<- prometheus.Metric) {
 		pullRequests []pullRequest
 	)
 
-	buckets := map[float64]uint64{
-		// within a day
-		time.Hour.Hours():      0,
-		6 * time.Hour.Hours():  0,
-		24 * time.Hour.Hours(): 0,
-		// within a week
-		2 * 24 * time.Hour.Hours(): 0,
-		4 * 24 * time.Hour.Hours(): 0,
-		7 * 24 * time.Hour.Hours(): 0,
-		// within a month
-		2 * 7 * 24 * time.Hour.Hours(): 0,
-		4 * 7 * 24 * time.Hour.Hours(): 0,
-		// feckin' old
-		60 * 24 * time.Hour.Hours():  0,
-		90 * 24 * time.Hour.Hours():  0,
-		180 * 24 * time.Hour.Hours(): 0,
-	}
+	buckets := CreateHourBuckets()
 
 	for {
 		var query struct {

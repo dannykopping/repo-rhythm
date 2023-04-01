@@ -26,6 +26,7 @@ func main() {
 	list := []beats.Beat{
 		&beats.IssueCount{},
 		&beats.OpenIssueAge{},
+		&beats.ClosedIssueLifecycle{},
 		&beats.PullRequestCount{},
 		&beats.OpenPullRequestAge{},
 	}
