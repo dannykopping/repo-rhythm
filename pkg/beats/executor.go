@@ -3,6 +3,7 @@ package beats
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/dannykopping/repo-rhythm/pkg/rhythm"
 	"github.com/shurcooL/githubv4"
@@ -38,9 +39,13 @@ func (e *Executor) Execute(query WithRateLimiter, variables map[string]interface
 		return TimeoutErr
 	}
 
+	if err != nil {
+		return fmt.Errorf("failed to execute query: %w", err)
+	}
+
 	if query.RateLimitRemaining() < 1 {
 		return RateLimitedErr
 	}
 
-	return err
+	return nil
 }

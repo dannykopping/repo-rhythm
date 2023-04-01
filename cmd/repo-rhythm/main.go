@@ -24,7 +24,8 @@ func main() {
 	}
 
 	list := []beats.Beat{
-		&beats.OpenIssues{},
+		&beats.IssuesCount{},
+		&beats.PullRequestsCount{},
 	}
 
 	src := oauth2.StaticTokenSource(
@@ -35,7 +36,7 @@ func main() {
 
 	exec := beats.NewExecutor(cfg, client)
 
-	gatherer := prometheus.NewRegistry()
+	gatherer := prometheus.NewPedanticRegistry()
 	reg := prometheus.WrapRegistererWithPrefix("repo_rhythm_", gatherer)
 
 	for _, beat := range list {
