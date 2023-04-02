@@ -24,11 +24,10 @@ func main() {
 	}
 
 	list := []beats.Beat{
-		&beats.IssueCount{},
+		&beats.Count{},
 		&beats.OpenIssueAge{},
-		&beats.ClosedIssueLifecycle{},
-		&beats.PullRequestCount{},
 		&beats.OpenPullRequestAge{},
+		&beats.ClosedIssueLifecycle{},
 	}
 
 	src := oauth2.StaticTokenSource(
