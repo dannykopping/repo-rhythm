@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"time"
@@ -13,6 +12,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
+
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 )
 
 func main() {
@@ -22,6 +24,9 @@ func main() {
 		Repo:            "loki",
 		TimeoutDuration: 10 * time.Second,
 	}
+
+	w := log.NewSyncWriter(os.Stderr)
+	logger := log.NewLogfmtLogger(w)
 
 	list := []beats.Beat{
 		&beats.Count{},
@@ -36,7 +41,7 @@ func main() {
 	httpClient := oauth2.NewClient(context.Background(), src)
 	client := githubv4.NewClient(httpClient)
 
-	exec := beats.NewExecutor(cfg, client)
+	exec := beats.NewExecutor(cfg, client, log.With(logger, "component", "executor"))
 
 	gatherer := prometheus.NewPedanticRegistry()
 	reg := prometheus.WrapRegistererWithPrefix("repo_rhythm_", gatherer)

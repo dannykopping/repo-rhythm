@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/dannykopping/repo-rhythm/pkg/rhythm"
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/shurcooL/githubv4"
 )
 
@@ -16,12 +18,14 @@ var TimeoutErr = errors.New("timeout")
 type Executor struct {
 	cfg    *rhythm.Config
 	client *githubv4.Client
+	logger log.Logger
 }
 
-func NewExecutor(cfg *rhythm.Config, client *githubv4.Client) *Executor {
+func NewExecutor(cfg *rhythm.Config, client *githubv4.Client, logger log.Logger) *Executor {
 	return &Executor{
 		cfg:    cfg,
 		client: client,
+		logger: logger,
 	}
 }
 
@@ -42,6 +46,8 @@ func (e *Executor) Execute(query WithRateLimiter, variables map[string]interface
 	if err != nil {
 		return fmt.Errorf("failed to execute query: %w", err)
 	}
+
+	level.Debug(e.logger).Log("msg", "query succeeded", "rate_limit_remaining", query.RateLimitRemaining())
 
 	if query.RateLimitRemaining() < 1 {
 		return RateLimitedErr
