@@ -10,7 +10,10 @@ import (
 type Beat interface {
 	prometheus.Collector
 
+	Name() string
 	Setup(*rhythm.Config, *Executor)
+	TickInterval() time.Duration
+	Tick() error
 }
 
 type Base struct {

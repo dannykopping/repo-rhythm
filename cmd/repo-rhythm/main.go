@@ -49,8 +49,32 @@ func main() {
 	for _, beat := range list {
 		beat.Setup(cfg, exec)
 		reg.MustRegister(beat)
+
+		go func(beat beats.Beat) {
+			tick := time.NewTicker(beat.TickInterval())
+			defer tick.Stop()
+
+			// tick immediately
+			for ; true; <-tick.C {
+				start := time.Now()
+
+				err := beat.Tick()
+				log := log.With(logger, "beat", beat.Name(), "interval", beat.TickInterval(), "duration", time.Since(start))
+
+				if err != nil {
+					level.Warn(log).Log("msg", "beat failed", "err", err)
+					continue
+				}
+
+				level.Warn(log).Log("msg", "beat succeeded")
+			}
+		}(beat)
 	}
 
-	http.Handle("/metrics", promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{}))
-	log.Fatal(http.ListenAndServe("127.0.0.1:9123", nil)) // TODO listen on all addresses
+	http.Handle("/metrics", promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{
+		ErrorHandling: promhttp.HTTPErrorOnError,
+	}))
+
+	// TODO listen on all addresses
+	level.Error(logger).Log("msg", "/metrics handler stopped", "err", http.ListenAndServe("127.0.0.1:9123", nil))
 }

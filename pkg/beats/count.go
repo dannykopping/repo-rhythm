@@ -1,6 +1,8 @@
 package beats
 
 import (
+	"time"
+
 	"github.com/dannykopping/repo-rhythm/pkg/rhythm"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/shurcooL/githubv4"
@@ -10,27 +12,41 @@ type Count struct {
 	cfg  *rhythm.Config
 	exec *Executor
 
-	issueCount       *prometheus.Desc
-	pullRequestCount *prometheus.Desc
+	issueCount       *prometheus.GaugeVec
+	pullRequestCount *prometheus.GaugeVec
+}
+
+func (o *Count) Name() string {
+	return "count issues & PRs"
+}
+
+func (o *Count) TickInterval() time.Duration {
+	return time.Minute
 }
 
 func (o *Count) Setup(cfg *rhythm.Config, exec *Executor) {
 	o.cfg = cfg
 	o.exec = exec
 
-	o.issueCount = prometheus.NewDesc("issues", "Current number of issues by state",
-		[]string{"state"}, map[string]string{
+	o.issueCount = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "issues",
+		Help: "Current number of issues by state",
+		ConstLabels: map[string]string{
 			"owner": cfg.Owner,
 			"repo":  cfg.Repo,
-		})
-	o.pullRequestCount = prometheus.NewDesc("pull_requests", "Current number of pull requests by state",
-		[]string{"state"}, map[string]string{
+		},
+	}, []string{"state"})
+	o.pullRequestCount = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "pull_requests",
+		Help: "Current number of pull requests by state",
+		ConstLabels: map[string]string{
 			"owner": cfg.Owner,
 			"repo":  cfg.Repo,
-		})
+		},
+	}, []string{"state"})
 }
 
-func (o *Count) Collect(ch chan<- prometheus.Metric) {
+func (o *Count) Tick() error {
 	var query struct {
 		Base
 
@@ -58,16 +74,22 @@ func (o *Count) Collect(ch chan<- prometheus.Metric) {
 		})
 
 		if err != nil {
-			// don't export metric upon error; the error is handled by the executor
-			continue
+			return err
 		}
 
-		ch <- prometheus.MustNewConstMetric(o.issueCount, prometheus.GaugeValue, query.Repository.Issues.TotalCount, string(issueState))
-		ch <- prometheus.MustNewConstMetric(o.pullRequestCount, prometheus.GaugeValue, query.Repository.PullRequests.TotalCount, string(prState))
+		o.issueCount.WithLabelValues(string(issueState)).Set(query.Repository.Issues.TotalCount)
+		o.pullRequestCount.WithLabelValues(string(prState)).Set(query.Repository.PullRequests.TotalCount)
 	}
+
+	return nil
+}
+
+func (o *Count) Collect(ch chan<- prometheus.Metric) {
+	o.issueCount.Collect(ch)
+	o.pullRequestCount.Collect(ch)
 }
 
 func (o *Count) Describe(ch chan<- *prometheus.Desc) {
-	ch <- o.issueCount
-	ch <- o.pullRequestCount
+	o.issueCount.Describe(ch)
+	o.pullRequestCount.Describe(ch)
 }
