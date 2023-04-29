@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dannykopping/repo-rhythm/pkg/metrics"
 	"github.com/dannykopping/repo-rhythm/pkg/rhythm"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/shurcooL/githubv4"
@@ -13,35 +14,43 @@ type OpenIssueAge struct {
 	cfg  *rhythm.Config
 	exec *Executor
 
-	ageDistribution *prometheus.Desc
+	age metrics.Distribution
+}
+
+func (o *OpenIssueAge) Name() string {
+	return "open issues age"
+}
+
+func (o *OpenIssueAge) TickInterval() time.Duration {
+	return time.Hour
 }
 
 func (o *OpenIssueAge) Setup(cfg *rhythm.Config, exec *Executor) {
 	o.cfg = cfg
 	o.exec = exec
-
-	o.ageDistribution = prometheus.NewDesc("open_issue_age", "Distribution of open issue ages by bucket",
-		nil, map[string]string{
-			"owner": cfg.Owner,
-			"repo":  cfg.Repo,
-		})
+	o.age = metrics.NewDistribution(
+		metrics.DistributionOpts{
+			Name: "open_issue_age",
+			Help: "Distribution of open issue ages by days",
+			ConstLabels: map[string]string{
+				"owner": cfg.Owner,
+				"repo":  cfg.Repo,
+			},
+		},
+		CreateDayBuckets(),
+	)
 }
 
-func (o *OpenIssueAge) Collect(ch chan<- prometheus.Metric) {
-	// TODO: we might need to collect in the background if there's a lot of pagination happening here,
-	// 		 since it might stall the scrape for too long or cause rate-limits to kick in
-
+func (o *OpenIssueAge) Tick() error {
 	type issue struct {
 		Id        githubv4.ID
 		CreatedAt githubv4.DateTime
 	}
 
 	var (
-		iterations    uint = 0
-		maxIterations uint = 100 // prevent infinite loop in the case of some bug, let's hope there are never more than 100*100 issues
-		pageSize      uint = 100
-		now                = time.Now()
-		fetched       int  = 0
+		pageSize uint = 100
+		now           = time.Now()
+		fetched       = 0
 
 		variables = map[string]interface{}{
 			"owner":  githubv4.String(o.cfg.Owner),
@@ -51,13 +60,8 @@ func (o *OpenIssueAge) Collect(ch chan<- prometheus.Metric) {
 			"limit":  githubv4.Int(pageSize),
 		}
 
-		sampleCount uint64
-		sampleSum   float64
-
 		issues []issue
 	)
-
-	buckets := CreateHourBuckets()
 
 	for {
 		var query struct {
@@ -75,17 +79,15 @@ func (o *OpenIssueAge) Collect(ch chan<- prometheus.Metric) {
 			} `graphql:"repository(name:$repo, owner:$owner)"`
 		}
 
-		iterations++
 		err := o.exec.Execute(&query, variables)
-
 		if err != nil {
 			// don't export metric upon error; the error is handled by the executor
-			return
+			return err
 		}
 
 		issues = append(issues, query.Repository.Issues.Nodes...)
-
 		fetched += len(query.Repository.Issues.Nodes)
+
 		// TODO: logger
 		fmt.Println(fetched)
 
@@ -93,28 +95,22 @@ func (o *OpenIssueAge) Collect(ch chan<- prometheus.Metric) {
 			break
 		}
 
-		if iterations > maxIterations {
-			panic(fmt.Sprintf("possible infinite loop detected in %T", o))
-		}
-
 		variables["cursor"] = githubv4.NewString(query.Repository.Issues.PageInfo.EndCursor)
 	}
 
+	o.age.Reset()
 	for _, issue := range issues {
-		hours := now.Sub(issue.CreatedAt.Time).Hours()
-		sampleCount++
-		sampleSum++
-
-		for bucket := range buckets {
-			if hours <= bucket {
-				buckets[bucket]++
-			}
-		}
+		hours := now.Sub(issue.CreatedAt.Time)
+		o.age.Observe(hours.Hours())
 	}
 
-	ch <- prometheus.MustNewConstHistogram(o.ageDistribution, sampleCount, sampleSum, buckets)
+	return nil
+}
+
+func (o *OpenIssueAge) Collect(ch chan<- prometheus.Metric) {
+	o.age.Collect(ch)
 }
 
 func (o *OpenIssueAge) Describe(ch chan<- *prometheus.Desc) {
-	ch <- o.ageDistribution
+	o.age.Describe(ch)
 }

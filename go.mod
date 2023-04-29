@@ -3,6 +3,7 @@ module github.com/dannykopping/repo-rhythm
 go 1.20
 
 require (
+	facette.io/natsort v0.0.0-20181210072756-2cd4dd1e2dcb
 	github.com/go-kit/log v0.2.0
 	github.com/prometheus/client_golang v1.14.0
 	github.com/shurcooL/githubv4 v0.0.0-20230305132112-efb623903184
