@@ -23,6 +23,7 @@ func main() {
 		Owner:           "grafana",
 		Repo:            "loki",
 		TimeoutDuration: 10 * time.Second,
+		TickInterval:    time.Minute,
 	}
 
 	w := log.NewSyncWriter(os.Stderr)
@@ -51,22 +52,24 @@ func main() {
 		reg.MustRegister(beat)
 
 		go func(beat beats.Beat) {
-			tick := time.NewTicker(beat.TickInterval())
+			tick := time.NewTicker(cfg.TickInterval)
 			defer tick.Stop()
 
 			// tick immediately
 			for ; true; <-tick.C {
 				start := time.Now()
 
-				err := beat.Tick()
-				log := log.With(logger, "beat", beat.Name(), "interval", beat.TickInterval(), "duration", time.Since(start))
+				log := log.With(logger, "beat", beat.Name(), "interval", cfg.TickInterval)
+				level.Info(log).Log("msg", "beat finished", "start", start)
+
+				err := beat.Tick(log)
 
 				if err != nil {
-					level.Warn(log).Log("msg", "beat failed", "err", err)
+					level.Warn(log).Log("msg", "beat failed", "err", err, start, "duration", time.Since(start))
 					continue
 				}
 
-				level.Warn(log).Log("msg", "beat succeeded")
+				level.Warn(log).Log("msg", "beat succeeded", start, "duration", time.Since(start))
 			}
 		}(beat)
 	}

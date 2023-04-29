@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/dannykopping/repo-rhythm/pkg/rhythm"
+	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/shurcooL/githubv4"
 )
@@ -46,7 +47,7 @@ func (o *Count) Setup(cfg *rhythm.Config, exec *Executor) {
 	}, []string{"state"})
 }
 
-func (o *Count) Tick() error {
+func (o *Count) Tick(log.Logger) error {
 	var query struct {
 		Base
 

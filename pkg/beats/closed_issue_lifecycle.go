@@ -6,6 +6,7 @@ import (
 
 	"github.com/dannykopping/repo-rhythm/pkg/metrics"
 	"github.com/dannykopping/repo-rhythm/pkg/rhythm"
+	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/shurcooL/githubv4"
 )
@@ -19,10 +20,6 @@ type ClosedIssueLifecycle struct {
 
 func (o *ClosedIssueLifecycle) Name() string {
 	return "closed issues lifecycle"
-}
-
-func (o *ClosedIssueLifecycle) TickInterval() time.Duration {
-	return time.Hour
 }
 
 func (o *ClosedIssueLifecycle) Setup(cfg *rhythm.Config, exec *Executor) {
@@ -42,7 +39,7 @@ func (o *ClosedIssueLifecycle) Setup(cfg *rhythm.Config, exec *Executor) {
 	)
 }
 
-func (o *ClosedIssueLifecycle) Tick() error {
+func (o *ClosedIssueLifecycle) Tick(log.Logger) error {
 	type issue struct {
 		Id        githubv4.ID
 		CreatedAt githubv4.DateTime

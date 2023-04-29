@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/dannykopping/repo-rhythm/pkg/rhythm"
+	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -12,8 +13,7 @@ type Beat interface {
 
 	Name() string
 	Setup(*rhythm.Config, *Executor)
-	TickInterval() time.Duration
-	Tick() error
+	Tick(log log.Logger) error
 }
 
 type Base struct {

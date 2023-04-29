@@ -6,6 +6,7 @@ import (
 
 	"github.com/dannykopping/repo-rhythm/pkg/metrics"
 	"github.com/dannykopping/repo-rhythm/pkg/rhythm"
+	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/shurcooL/githubv4"
 )
@@ -19,10 +20,6 @@ type OpenPullRequestAge struct {
 
 func (o *OpenPullRequestAge) Name() string {
 	return "open pull requests age"
-}
-
-func (o *OpenPullRequestAge) TickInterval() time.Duration {
-	return time.Hour
 }
 
 func (o *OpenPullRequestAge) Setup(cfg *rhythm.Config, exec *Executor) {
@@ -42,7 +39,7 @@ func (o *OpenPullRequestAge) Setup(cfg *rhythm.Config, exec *Executor) {
 	)
 }
 
-func (o *OpenPullRequestAge) Tick() error {
+func (o *OpenPullRequestAge) Tick(log.Logger) error {
 	type pullRequest struct {
 		Id        githubv4.ID
 		CreatedAt githubv4.DateTime
